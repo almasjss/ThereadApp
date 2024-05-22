@@ -1,7 +1,6 @@
 package com.example.thereadapp;
 
 import android.os.Bundle;
-import android.util.Log;
 import android.view.View;
 import android.widget.Button;
 import android.widget.TextView;
@@ -12,10 +11,11 @@ import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
 
-import java.util.List;
+import java.io.IOException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import retrofit2.Call;
-import retrofit2.Callback;
 import retrofit2.Response;
 import retrofit2.Retrofit;
 import retrofit2.converter.gson.GsonConverterFactory;
@@ -26,6 +26,12 @@ public class MainActivity extends AppCompatActivity {
 
     public TextView view;
     public Button btn;
+    private final ExecutorService executorService;
+
+    public MainActivity() {
+       executorService = Executors.newSingleThreadExecutor();
+    }
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -37,7 +43,6 @@ public class MainActivity extends AppCompatActivity {
             v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom);
             return insets;
         });
-
         view = (TextView) findViewById(R.id.textview);
         btn = (Button) findViewById(R.id.btn);
 
@@ -49,33 +54,28 @@ public class MainActivity extends AppCompatActivity {
         });
     }
     private void getAPIData() {
-        Retrofit retrofit = new Retrofit.Builder().baseUrl(baseurl)
-                .addConverterFactory(GsonConverterFactory.create())
-                .build();
-        ApiService retrofitService = retrofit.create(ApiService.class);
-        Call<ResponseObject> apiData = retrofitService.getRandomFact();
-        apiData.enqueue(new Callback<ResponseObject>() {
-            @Override
-            public void onResponse(Call<ResponseObject> call, Response<ResponseObject> response) {
-                if (response.code() == 200) {
-//                    List<ResponseObject> apiData = response.body();
-//                    for (int i = 0; i < apiData.size(); i++) {
-//                        if (apiData.get(i).getId() != null) {
-//                            Log.d("TAG", "Id: " + apiData.get(i).getId());
-//                        }
-//                    }
+        executorService.execute(() -> {
+            Retrofit retrofit = new Retrofit.Builder().baseUrl(baseurl)
+                    .addConverterFactory(GsonConverterFactory.create())
+                    .build();
+            ApiService retrofitService = retrofit.create(ApiService.class);
+            Call<ResponseObject> apiData = retrofitService.getRandomFact();
+            try {
+                Response<ResponseObject> response = apiData.execute();
+                if (response.isSuccessful()) {
                     ResponseObject data = response.body();
-                    Log.d("TAG", "Id: " + data.getText());
-                    view.setText(data.getText());
+                    if (data!=null) {
+                       runOnUiThread(()-> view.setText(data.getText()));
+                    }
+                }else {
+                    System.out.println("Fail::"+response.errorBody().string());
                 }
-            }
-
-            @Override
-            public void onFailure(Call<ResponseObject> call, Throwable t) {
-// getting error message
-                Log.e("TAG", "onFailure: " + t.getMessage());
+            } catch (IOException e) {
+                e.printStackTrace();
             }
         });
-
+    }
+    public void shutdown(){
+        executorService.shutdown();
     }
 }
